@@ -1,4 +1,10 @@
-# Inputalk
+# Inputalk Funkey
+
+This repository is a small local fork of the original [Inputalk](https://github.com/sebi75/inputalk) project.
+
+The only intended change is a fix for the macOS Fn / Globe key bug: writing `AppleFnUsageType = 0` updates the stored setting but does not always update the live system behavior. This fork additionally calls the private HIToolbox function `TISUpdateFnUsageType(0)`, so the emoji picker is suppressed immediately while Inputalk is running.
+
+For the upstream project, documentation, releases, and general development, use the original repository: [sebi75/inputalk](https://github.com/sebi75/inputalk).
 
 Free, open-source dictation for macOS. Hold Fn, speak, release — text appears wherever your cursor is.
 
@@ -31,7 +37,7 @@ Whisper models download on first use and run on Apple Neural Engine.
 | small | 466 MB | ~4x realtime | Very good |
 | medium | 1.5 GB | ~2x realtime | Excellent |
 
-Switch models in Settings. Model data is stored in `~/Library/Application Support/com.inputalk.app/Models/` and removed on uninstall.
+Switch models in Settings. In this fork, model data is stored in `~/Library/Application Support/com.inputalk.funkey.app/Models/` and removed on uninstall.
 
 ## Requirements
 

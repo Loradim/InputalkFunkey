@@ -26,7 +26,7 @@ class TranscriptionService: ObservableObject {
     /// App cleaners remove ~/Library/Application Support/<bundleID>/ on uninstall.
     static let modelsDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
-        let bundleID = Bundle.main.bundleIdentifier ?? "com.inputalk.app"
+        let bundleID = Bundle.main.bundleIdentifier ?? "com.inputalk.funkey.app"
         return appSupport.appendingPathComponent(bundleID).appendingPathComponent("Models")
     }()
 

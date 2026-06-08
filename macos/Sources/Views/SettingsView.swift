@@ -168,7 +168,7 @@ struct SettingsView: View {
             // About
             Section {
                 HStack {
-                    Text("Inputalk")
+                    Text("Inputalk Funkey")
                     Spacer()
                     Text("v0.1.0")
                         .foregroundStyle(.secondary)

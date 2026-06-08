@@ -21,8 +21,9 @@ RED='\033[0;31m'
 YELLOW='\033[0;33m'
 NC='\033[0m' # No Color
 
-APP_NAME="Inputalk"
-BUNDLE_ID="com.inputalk.app"
+APP_NAME="Inputalk Funkey"
+EXECUTABLE_NAME="InputalkFunkey"
+BUNDLE_ID="com.inputalk.funkey.app"
 DIST_DIR="dist"
 APP_BUNDLE="$DIST_DIR/$APP_NAME.app"
 UNIVERSAL="${UNIVERSAL:-true}"
@@ -48,8 +49,8 @@ else
 fi
 
 # Verify binary was created
-if [ ! -f "$BUILD_DIR/Inputalk" ]; then
-    echo -e "${RED}Error: Binary not found at $BUILD_DIR/Inputalk${NC}"
+if [ ! -f "$BUILD_DIR/$EXECUTABLE_NAME" ]; then
+    echo -e "${RED}Error: Binary not found at $BUILD_DIR/$EXECUTABLE_NAME${NC}"
     exit 1
 fi
 
@@ -59,13 +60,13 @@ mkdir -p "$APP_BUNDLE/Contents/MacOS"
 mkdir -p "$APP_BUNDLE/Contents/Resources"
 
 # Copy binary
-cp "$BUILD_DIR/Inputalk" "$APP_BUNDLE/Contents/MacOS/Inputalk"
+cp "$BUILD_DIR/$EXECUTABLE_NAME" "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 
 # Copy Info.plist
 cp "Resources/Info.plist" "$APP_BUNDLE/Contents/"
 
 # Copy resource bundle if it exists (contains bundled resources)
-RESOURCE_BUNDLE="$BUILD_DIR/Inputalk_Inputalk.bundle"
+RESOURCE_BUNDLE="$BUILD_DIR/InputalkFunkey_InputalkFunkey.bundle"
 if [ -d "$RESOURCE_BUNDLE" ]; then
     echo -e "${BLUE}Copying resource bundle...${NC}"
     cp -R "$RESOURCE_BUNDLE" "$APP_BUNDLE/Contents/Resources/"
@@ -80,21 +81,21 @@ else
 fi
 
 # Set executable permissions
-chmod +x "$APP_BUNDLE/Contents/MacOS/Inputalk"
+chmod +x "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 
 echo -e "${GREEN}App bundle created at: $APP_BUNDLE${NC}"
 
 # Show binary info
 echo -e "${BLUE}Binary info:${NC}"
-file "$APP_BUNDLE/Contents/MacOS/Inputalk"
-lipo -info "$APP_BUNDLE/Contents/MacOS/Inputalk"
+file "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
+lipo -info "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 
 # Code signing
 if [ ! -z "$CODE_SIGN_IDENTITY" ]; then
     echo -e "${BLUE}Code signing with identity: $CODE_SIGN_IDENTITY${NC}"
 
     # Sign inside-out: nested bundles first, then the main app
-    RESOURCE_BUNDLE_PATH="$APP_BUNDLE/Contents/Resources/Inputalk_Inputalk.bundle"
+    RESOURCE_BUNDLE_PATH="$APP_BUNDLE/Contents/Resources/InputalkFunkey_InputalkFunkey.bundle"
     if [ -d "$RESOURCE_BUNDLE_PATH" ]; then
         echo -e "${BLUE}Signing nested resource bundle...${NC}"
         codesign --force --sign "$CODE_SIGN_IDENTITY" \

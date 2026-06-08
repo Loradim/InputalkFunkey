@@ -1,6 +1,12 @@
 import AppKit
 import Carbon.HIToolbox
 
+@_silgen_name("TISUpdateFnUsageType")
+private func TISUpdateFnUsageType(_ value: Int32)
+
+@_silgen_name("TISGetFnUsageType")
+private func TISGetFnUsageType() -> Int32
+
 // MARK: - Hotkey Manager
 
 /// Manages the Fn (Globe) key for dictation:
@@ -21,14 +27,18 @@ class HotkeyManager {
 
     /// Saved original Fn key usage type so we can restore on quit
     private var originalFnUsageType: Int?
+    private var hadOriginalFnUsageType = false
+    private var didOverrideSystemFnBehavior = false
 
     func start() {
-        guard AXIsProcessTrusted() else { return }
         stop()
 
-        // Disable the system Globe key behavior (emoji picker / input switching)
-        // by setting AppleFnUsageType to 0 ("Do Nothing"). We restore on stop().
+        // Disable the system Globe key behavior (emoji picker / input switching).
+        // Writing AppleFnUsageType persists the setting, while TISUpdateFnUsageType
+        // applies it to the live Text Input state immediately. We restore on stop().
         disableSystemFnBehavior()
+
+        guard AXIsProcessTrusted() else { return }
 
         let state = FnKeyState()
         state.manager = self
@@ -75,19 +85,39 @@ class HotkeyManager {
 
     // MARK: - System Fn Key Override
 
-    /// Disable macOS Globe key system action by writing AppleFnUsageType = 0
+    /// Disable macOS Globe key system action by applying AppleFnUsageType = 0
     private func disableSystemFnBehavior() {
+        guard !didOverrideSystemFnBehavior else { return }
+
         let defaults = UserDefaults(suiteName: "com.apple.HIToolbox")
-        originalFnUsageType = defaults?.integer(forKey: "AppleFnUsageType")
-        defaults?.set(0, forKey: "AppleFnUsageType")
+        hadOriginalFnUsageType = defaults?.object(forKey: "AppleFnUsageType") != nil
+        originalFnUsageType = Int(TISGetFnUsageType())
+        applySystemFnUsageType(0)
+        didOverrideSystemFnBehavior = true
     }
 
     /// Restore the user's original Globe key behavior
     private func restoreSystemFnBehavior() {
-        guard let original = originalFnUsageType else { return }
-        let defaults = UserDefaults(suiteName: "com.apple.HIToolbox")
-        defaults?.set(original, forKey: "AppleFnUsageType")
+        guard didOverrideSystemFnBehavior, let original = originalFnUsageType else { return }
+
+        applySystemFnUsageType(original)
+
+        if !hadOriginalFnUsageType {
+            let defaults = UserDefaults(suiteName: "com.apple.HIToolbox")
+            defaults?.removeObject(forKey: "AppleFnUsageType")
+            defaults?.synchronize()
+        }
+
         originalFnUsageType = nil
+        hadOriginalFnUsageType = false
+        didOverrideSystemFnBehavior = false
+    }
+
+    private func applySystemFnUsageType(_ value: Int) {
+        let defaults = UserDefaults(suiteName: "com.apple.HIToolbox")
+        defaults?.set(value, forKey: "AppleFnUsageType")
+        defaults?.synchronize()
+        TISUpdateFnUsageType(Int32(value))
     }
 
     func cancelRecording() {

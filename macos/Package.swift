@@ -3,7 +3,7 @@
 import PackageDescription
 
 let package = Package(
-    name: "Inputalk",
+    name: "InputalkFunkey",
     platforms: [
         .macOS(.v15)
     ],
@@ -12,10 +12,11 @@ let package = Package(
     ],
     targets: [
         .executableTarget(
-            name: "Inputalk",
+            name: "InputalkFunkey",
             dependencies: [
                 .product(name: "WhisperKit", package: "WhisperKit"),
             ],
+            path: "Sources",
             resources: [
                 .copy("Resources/MenuBarIcon.png"),
                 .copy("Resources/MenuBarIcon@2x.png"),

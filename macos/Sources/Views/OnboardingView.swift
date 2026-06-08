@@ -64,7 +64,7 @@ struct OnboardingView: View {
                 WelcomeIcon()
 
                 VStack(spacing: 8) {
-                    Text("Welcome to Inputalk")
+                    Text("Welcome to Inputalk Funkey")
                         .font(.system(size: 22, weight: .semibold))
                         .tracking(-0.3)
                         .foregroundStyle(.white)
@@ -111,7 +111,7 @@ struct OnboardingView: View {
                         .tracking(-0.3)
                         .foregroundStyle(.white)
 
-                    Text("Inputalk needs your microphone to hear your voice for dictation")
+                    Text("Inputalk Funkey needs your microphone to hear your voice for dictation")
                         .font(.system(size: 13))
                         .foregroundStyle(Color.white.opacity(0.4))
                         .multilineTextAlignment(.center)

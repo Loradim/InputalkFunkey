@@ -92,8 +92,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Hotkey Setup
 
     private func setupHotkey() {
-        guard permissions.hasAccessibility else { return }
-
         hotkeyManager.onRecordStart = { [weak self] in
             self?.startRecording()
         }
@@ -243,13 +241,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appMenuItem.submenu = appMenu
         appMenu.addItem(
             NSMenuItem(
-                title: "About Inputalk",
+                title: "About Inputalk Funkey",
                 action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)),
                 keyEquivalent: ""))
         appMenu.addItem(.separator())
         appMenu.addItem(
             NSMenuItem(
-                title: "Hide Inputalk",
+                title: "Hide Inputalk Funkey",
                 action: #selector(NSApplication.hide(_:)),
                 keyEquivalent: "h"))
         let hideOthers = NSMenuItem(
@@ -266,7 +264,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         appMenu.addItem(.separator())
         appMenu.addItem(
             NSMenuItem(
-                title: "Quit Inputalk",
+                title: "Quit Inputalk Funkey",
                 action: #selector(NSApplication.terminate(_:)),
                 keyEquivalent: "q"))
 
@@ -333,7 +331,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
             // Fallback to SF Symbol
             let image = NSImage(
-                systemSymbolName: "waveform", accessibilityDescription: "Inputalk")
+                systemSymbolName: "waveform", accessibilityDescription: "Inputalk Funkey")
             image?.isTemplate = true
             return image
         case .recording:
@@ -365,7 +363,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(NSMenuItem.separator())
 
         let quitItem = NSMenuItem(
-            title: "Quit Inputalk", action: #selector(quitApp), keyEquivalent: "q")
+            title: "Quit Inputalk Funkey", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
@@ -414,7 +412,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 backing: .buffered,
                 defer: false
             )
-            window.title = "Welcome to Inputalk"
+            window.title = "Welcome to Inputalk Funkey"
             window.center()
             window.contentView = NSHostingView(
                 rootView: OnboardingView(onComplete: { [weak self] in
