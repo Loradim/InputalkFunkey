@@ -5,6 +5,19 @@ struct TranscriptionModel: Identifiable, Equatable {
     let id: String
     let displayName: String
     let sizeDescription: String
+    let shouldPrewarm: Bool
+
+    init(
+        id: String,
+        displayName: String,
+        sizeDescription: String,
+        shouldPrewarm: Bool = true
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.sizeDescription = sizeDescription
+        self.shouldPrewarm = shouldPrewarm
+    }
 
     var pickerTitle: String {
         "\(displayName) (\(sizeDescription))"
@@ -36,12 +49,14 @@ class TranscriptionService: ObservableObject {
         TranscriptionModel(
             id: "openai_whisper-large-v3-v20240930_626MB",
             displayName: "Large",
-            sizeDescription: "~627 MB"
+            sizeDescription: "~627 MB",
+            shouldPrewarm: false
         ),
         TranscriptionModel(
             id: "openai_whisper-large-v3-v20240930_turbo_632MB",
             displayName: "Large-Turbo",
-            sizeDescription: "~646 MB"
+            sizeDescription: "~646 MB",
+            shouldPrewarm: false
         ),
     ]
 
@@ -75,6 +90,10 @@ class TranscriptionService: ObservableObject {
         availableModels.first { $0.id == modelID }?.displayName ?? modelID
     }
 
+    func shouldPrewarm(modelID: String) -> Bool {
+        availableModels.first { $0.id == modelID }?.shouldPrewarm ?? true
+    }
+
     func loadModel() async {
         guard modelState != .loading else { return }
         if case .downloading = modelState { return }
@@ -102,10 +121,11 @@ class TranscriptionService: ObservableObject {
 
             // Step 2: Load from downloaded folder
             modelState = .loading
+            let shouldPrewarm = shouldPrewarm(modelID: selectedModel)
             let kit = try await WhisperKit(
                 modelFolder: modelFolder.path,
                 verbose: false,
-                prewarm: true,
+                prewarm: shouldPrewarm,
                 load: true,
                 download: false
             )

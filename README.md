@@ -41,6 +41,8 @@ Whisper models download on first use and run on Apple Neural Engine.
 
 Switch models in Settings. In this fork, model data is stored in `~/Library/Application Support/com.inputalk.funkey.app/Models/` and removed on uninstall.
 
+Large and large-turbo skip WhisperKit prewarming to avoid very long first-load times; Core ML may still optimize them on first use.
+
 ## Requirements
 
 - macOS 15+
@@ -48,11 +50,14 @@ Switch models in Settings. In this fork, model data is stored in `~/Library/Appl
 
 ## Build from source
 
+For local use, build and install the app bundle with the local build script:
+
 ```bash
 cd macos
-swift build
-swift run
+./scripts/build-install-local.sh
 ```
+
+If macOS complains about `resource fork, Finder information, or similar detritus`, run the script a second time; it clears extended attributes before signing the local app.
 
 ### Release build (signed + notarized)
 
