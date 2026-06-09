@@ -1,6 +1,16 @@
 @preconcurrency import WhisperKit
 import Foundation
 
+struct TranscriptionModel: Identifiable, Equatable {
+    let id: String
+    let displayName: String
+    let sizeDescription: String
+
+    var pickerTitle: String {
+        "\(displayName) (\(sizeDescription))"
+    }
+}
+
 enum ModelState: Equatable {
     case unloaded
     case downloading(progress: Double)
@@ -18,7 +28,22 @@ class TranscriptionService: ObservableObject {
         }
     }
 
-    let availableModels = ["tiny", "base", "small", "medium"]
+    let availableModels = [
+        TranscriptionModel(id: "tiny", displayName: "Tiny", sizeDescription: "~75 MB"),
+        TranscriptionModel(id: "base", displayName: "Base", sizeDescription: "~142 MB"),
+        TranscriptionModel(id: "small", displayName: "Small", sizeDescription: "~466 MB"),
+        TranscriptionModel(id: "medium", displayName: "Medium", sizeDescription: "~1.5 GB"),
+        TranscriptionModel(
+            id: "openai_whisper-large-v3-v20240930_626MB",
+            displayName: "Large",
+            sizeDescription: "~627 MB"
+        ),
+        TranscriptionModel(
+            id: "openai_whisper-large-v3-v20240930_turbo_632MB",
+            displayName: "Large-Turbo",
+            sizeDescription: "~646 MB"
+        ),
+    ]
 
     private var whisperKit: WhisperKit?
 
@@ -38,8 +63,16 @@ class TranscriptionService: ObservableObject {
         return ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)
     }
 
+    var selectedModelDisplayName: String {
+        displayName(for: selectedModel)
+    }
+
     init() {
         self.selectedModel = UserDefaults.standard.string(forKey: "selectedModel") ?? "base"
+    }
+
+    func displayName(for modelID: String) -> String {
+        availableModels.first { $0.id == modelID }?.displayName ?? modelID
     }
 
     func loadModel() async {

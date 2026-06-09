@@ -36,6 +36,8 @@ Whisper models download on first use and run on Apple Neural Engine.
 | **base** | **142 MB** | **~7x realtime** | **Good (default)** |
 | small | 466 MB | ~4x realtime | Very good |
 | medium | 1.5 GB | ~2x realtime | Excellent |
+| large | ~627 MB | 1x realtime | Best |
+| large-turbo | ~646 MB | ~8x realtime | Excellent |
 
 Switch models in Settings. In this fork, model data is stored in `~/Library/Application Support/com.inputalk.funkey.app/Models/` and removed on uninstall.
 

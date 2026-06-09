@@ -265,7 +265,7 @@ struct OnboardingView: View {
         switch transcription.modelState {
         case .ready:
             VStack(spacing: 12) {
-                Text("Model \"\(transcription.selectedModel)\" is ready")
+                Text("Model \"\(transcription.selectedModelDisplayName)\" is ready")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.white.opacity(0.4))
 
@@ -282,7 +282,7 @@ struct OnboardingView: View {
             }
         case .downloading(let progress):
             VStack(spacing: 12) {
-                Text("Downloading \"\(transcription.selectedModel)\" — \(Int(progress * 100))%")
+                Text("Downloading \"\(transcription.selectedModelDisplayName)\" — \(Int(progress * 100))%")
                     .font(.system(size: 13))
                     .foregroundStyle(Color.white.opacity(0.4))
                 ProgressView(value: progress)
@@ -337,7 +337,7 @@ struct OnboardingView: View {
                     )
                     OnboardingSummaryRow(
                         icon: "cpu",
-                        title: "Model: \(transcription.selectedModel)",
+                        title: "Model: \(transcription.selectedModelDisplayName)",
                         granted: transcription.modelState == .ready
                     )
                 }

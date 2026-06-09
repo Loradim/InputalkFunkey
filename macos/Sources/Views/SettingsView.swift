@@ -37,10 +37,9 @@ struct SettingsView: View {
             // Model
             Section {
                 Picker(selection: $transcription.selectedModel) {
-                    Text("Tiny (~75 MB)").tag("tiny")
-                    Text("Base (~142 MB)").tag("base")
-                    Text("Small (~466 MB)").tag("small")
-                    Text("Medium (~1.5 GB)").tag("medium")
+                    ForEach(transcription.availableModels) { model in
+                        Text(model.pickerTitle).tag(model.id)
+                    }
                 } label: {
                     Label("Model", systemImage: "cpu")
                 }
