@@ -32,6 +32,13 @@ private final class AudioSampleCollector: @unchecked Sendable {
     }
 }
 
+/// AVAudioConverter's input block is treated as @Sendable, but it is called
+/// synchronously during conversion. Keep this wrapper local to that handoff
+/// instead of marking AVAudioPCMBuffer as broadly Sendable.
+private struct ConverterInputBuffer: @unchecked Sendable {
+    let buffer: AVAudioPCMBuffer
+}
+
 @MainActor
 class AudioRecorder: ObservableObject {
     @Published var isRecording = false
@@ -130,11 +137,12 @@ class AudioRecorder: ObservableObject {
                     pcmFormat: targetFormat, frameCapacity: frameCount)
             else { return }
 
+            let inputBuffer = ConverterInputBuffer(buffer: buffer)
             var error: NSError?
             let status = converter.convert(to: convertedBuffer, error: &error) {
                 _, outStatus in
                 outStatus.pointee = .haveData
-                return buffer
+                return inputBuffer.buffer
             }
 
             guard status != .error, error == nil,
