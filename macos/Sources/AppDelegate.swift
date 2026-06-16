@@ -377,6 +377,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         pasteLastItem.isEnabled = lastTranscription != nil
         menu.addItem(pasteLastItem)
 
+        let clearLastItem = NSMenuItem(
+            title: "Clear Last Transcription",
+            action: #selector(clearLastTranscription),
+            keyEquivalent: "")
+        clearLastItem.target = self
+        clearLastItem.isEnabled = lastTranscription != nil
+        menu.addItem(clearLastItem)
+
         let settingsItem = NSMenuItem(
             title: "Settings...", action: #selector(showSettingsAction), keyEquivalent: ",")
         settingsItem.target = self
@@ -409,6 +417,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         TextInserter.insertText(text)
+    }
+
+    @objc private func clearLastTranscription() {
+        lastTranscription = nil
     }
 
     func showSettings() {
