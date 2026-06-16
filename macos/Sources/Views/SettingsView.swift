@@ -26,7 +26,9 @@ struct SettingsView: View {
 
                 VStack(alignment: .leading, spacing: 4) {
                     Label("Trigger Modes", systemImage: "hand.tap")
-                    Text("Hold Fn: push-to-talk\nDouble-press Fn: hands-free (press again to stop)")
+                    Text(
+                        "Hold Fn: push-to-talk\nDouble-press Fn: hands-free (press again to stop)\nFn + V: paste last transcription"
+                    )
                         .font(.caption)
                         .foregroundStyle(.tertiary)
                 }

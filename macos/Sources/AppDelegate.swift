@@ -27,6 +27,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var settingsWindow: NSWindow?
     var onboardingWindow: NSWindow?
     private var appState: AppState = .idle
+    private var lastTranscription: String?
 
     /// Prevent App Nap from making the hotkey unresponsive
     private var activityToken: NSObjectProtocol?
@@ -98,6 +99,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         hotkeyManager.onRecordStop = { [weak self] in
             self?.stopRecordingAndTranscribe()
         }
+        hotkeyManager.onPasteLastTranscription = { [weak self] in
+            self?.pasteLastTranscription()
+        }
         hotkeyManager.start()
     }
 
@@ -146,6 +150,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 // the user just sees "Transcribing" a bit longer on first use
                 let text = try await transcriptionService.transcribe(audioSamples: samples)
                 if !text.isEmpty {
+                    lastTranscription = text
                     TextInserter.insertText(text)
                     updateIndicator(state: .done(text: text))
                     indicatorDismissTask = Task {
@@ -211,6 +216,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         audioLevelCancellable?.cancel()
         audioLevelCancellable = nil
         indicatorPanel?.orderOut(nil)
+    }
+
+    private func showTemporaryMessage(_ text: String) {
+        showIndicator(state: .message(text: text))
+        indicatorDismissTask = Task {
+            try? await Task.sleep(nanoseconds: 1_500_000_000)
+            dismissIndicator()
+        }
     }
 
     private func positionIndicatorAtScreenBottom() {
@@ -354,10 +367,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func showContextMenu() {
         let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        let pasteLastItem = NSMenuItem(
+            title: "Paste Last Transcription (Fn + V)",
+            action: #selector(pasteLastTranscription),
+            keyEquivalent: "")
+        pasteLastItem.target = self
+        pasteLastItem.isEnabled = lastTranscription != nil
+        menu.addItem(pasteLastItem)
 
         let settingsItem = NSMenuItem(
             title: "Settings...", action: #selector(showSettingsAction), keyEquivalent: ",")
         settingsItem.target = self
+        settingsItem.isEnabled = true
         menu.addItem(settingsItem)
 
         menu.addItem(NSMenuItem.separator())
@@ -365,6 +388,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let quitItem = NSMenuItem(
             title: "Quit Inputalk Funkey", action: #selector(quitApp), keyEquivalent: "q")
         quitItem.target = self
+        quitItem.isEnabled = true
         menu.addItem(quitItem)
 
         statusItem.menu = menu
@@ -376,6 +400,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showSettingsAction() {
         showSettings()
+    }
+
+    @objc private func pasteLastTranscription() {
+        guard let text = lastTranscription, !text.isEmpty else {
+            showTemporaryMessage("No transcription yet")
+            return
+        }
+
+        TextInserter.insertText(text)
     }
 
     func showSettings() {

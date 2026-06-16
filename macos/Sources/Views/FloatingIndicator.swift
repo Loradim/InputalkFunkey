@@ -4,6 +4,7 @@ enum IndicatorState: Equatable {
     case recording(level: Float)
     case processing
     case done(text: String)
+    case message(text: String)
 }
 
 struct FloatingIndicatorView: View {
@@ -33,6 +34,10 @@ struct FloatingIndicatorView: View {
                 case .done:
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+                        .font(.system(size: 16))
+                case .message:
+                    Image(systemName: "info.circle.fill")
+                        .foregroundStyle(.secondary)
                         .font(.system(size: 16))
                 }
             }
@@ -83,6 +88,12 @@ struct FloatingIndicatorView: View {
                     .lineLimit(1)
                     .truncationMode(.tail)
                     .frame(maxWidth: 340)
+
+            case .message(let text):
+                Text(text)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
             }
         }
         .padding(.horizontal, 20)

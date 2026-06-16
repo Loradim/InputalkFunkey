@@ -90,6 +90,10 @@ echo -e "${BLUE}Binary info:${NC}"
 file "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 lipo -info "$APP_BUNDLE/Contents/MacOS/$EXECUTABLE_NAME"
 
+# Clear extended attributes before signing. FinderInfo/resource fork metadata can be
+# added while copying bundles and causes local ad-hoc signing to fail.
+xattr -cr "$APP_BUNDLE"
+
 # Code signing
 if [ ! -z "$CODE_SIGN_IDENTITY" ]; then
     echo -e "${BLUE}Code signing with identity: $CODE_SIGN_IDENTITY${NC}"

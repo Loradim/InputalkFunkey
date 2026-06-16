@@ -18,6 +18,7 @@ private func TISGetFnUsageType() -> Int32
 class HotkeyManager {
     var onRecordStart: (() -> Void)?
     var onRecordStop: (() -> Void)?
+    var onPasteLastTranscription: (() -> Void)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -46,8 +47,9 @@ class HotkeyManager {
 
         let userInfo = Unmanaged.passUnretained(state).toOpaque()
 
-        // Listen for flagsChanged events (modifier key presses, which includes Fn)
-        let eventMask: CGEventMask = 1 << CGEventType.flagsChanged.rawValue
+        // Listen for Fn modifier changes and Fn+V retry insertion.
+        let eventMask: CGEventMask =
+            (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
 
         guard
             let tap = CGEvent.tapCreate(
@@ -144,6 +146,7 @@ private enum FnPhase {
     case waitingForDoubleTap    // First quick tap done, waiting for second tap
     case holdRecording          // Holding Fn, recording in progress
     case handsFreeRecording     // Double-tapped, recording until next Fn press
+    case shortcutConsumed       // Fn+V handled; wait for Fn release before returning to idle
 }
 
 private class FnKeyState: @unchecked Sendable {
@@ -164,6 +167,12 @@ private class FnKeyState: @unchecked Sendable {
     let doubleTapWindow: TimeInterval = 0.4
 }
 
+private let fnFlag: UInt64 = 0x800000
+private let retryPasteKeyCode = Int64(kVK_ANSI_V)
+private let shortcutBlockingModifiers: CGEventFlags = [
+    .maskCommand, .maskAlternate, .maskShift, .maskControl,
+]
+
 // MARK: - CGEvent Callback (C-function, runs on event tap thread)
 
 private func fnEventCallback(
@@ -178,15 +187,22 @@ private func fnEventCallback(
         return Unmanaged.passUnretained(event)
     }
 
-    guard type == .flagsChanged, let userInfo else {
+    guard let userInfo else {
         return Unmanaged.passUnretained(event)
     }
 
     let state = Unmanaged<FnKeyState>.fromOpaque(userInfo).takeUnretainedValue()
 
+    if type == .keyDown {
+        return handleKeyDown(event: event, state: state)
+    }
+
+    guard type == .flagsChanged else {
+        return Unmanaged.passUnretained(event)
+    }
+
     // Check if the Fn (Globe / SecondaryFn) flag changed
     // NX_SECONDARYFN = 0x800000 in IOKit
-    let fnFlag: UInt64 = 0x800000
     let fnIsDown = (event.flags.rawValue & fnFlag) != 0
 
     // Only act on events where the Fn flag actually toggled.
@@ -201,8 +217,7 @@ private func fnEventCallback(
     }
 
     // Fn flag changed — ignore if other modifiers are also held (Cmd, Opt, Shift, Ctrl)
-    let otherModifiers: CGEventFlags = [.maskCommand, .maskAlternate, .maskShift, .maskControl]
-    let hasOtherModifiers = !event.flags.intersection(otherModifiers).isEmpty
+    let hasOtherModifiers = !event.flags.intersection(shortcutBlockingModifiers).isEmpty
     if hasOtherModifiers {
         return Unmanaged.passUnretained(event)
     }
@@ -214,6 +229,35 @@ private func fnEventCallback(
     // Suppress Fn events to prevent macOS from showing
     // the emoji picker, keyboard switcher, or dictation panel.
     return nil
+}
+
+private func handleKeyDown(event: CGEvent, state: FnKeyState) -> Unmanaged<CGEvent>? {
+    let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
+    guard keyCode == retryPasteKeyCode else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    let fnIsDown = ((event.flags.rawValue & fnFlag) != 0) || state.previousFnDown
+    guard fnIsDown else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    let hasOtherModifiers = !event.flags.intersection(shortcutBlockingModifiers).isEmpty
+    guard !hasOtherModifiers else {
+        return Unmanaged.passUnretained(event)
+    }
+
+    switch state.phase {
+    case .idle, .fnDownPending:
+        DispatchQueue.main.async {
+            handlePasteLastTranscriptionShortcut(state: state)
+        }
+        return nil
+    case .shortcutConsumed:
+        return nil
+    case .waitingForDoubleTap, .holdRecording, .handsFreeRecording:
+        return Unmanaged.passUnretained(event)
+    }
 }
 
 @MainActor
@@ -279,5 +323,22 @@ private func handleFnStateChange(state: FnKeyState, fnPressed: Bool) {
             state.phase = .idle
             state.manager?.onRecordStop?()
         }
+
+    case .shortcutConsumed:
+        if !fnPressed {
+            state.phase = .idle
+        }
     }
+}
+
+@MainActor
+private func handlePasteLastTranscriptionShortcut(state: FnKeyState) {
+    guard state.phase == .idle || state.phase == .fnDownPending else { return }
+
+    state.holdTimer?.cancel()
+    state.holdTimer = nil
+    state.doubleTapTimer?.cancel()
+    state.doubleTapTimer = nil
+    state.phase = .shortcutConsumed
+    state.manager?.onPasteLastTranscription?()
 }
