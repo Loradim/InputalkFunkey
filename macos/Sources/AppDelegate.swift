@@ -22,6 +22,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let audioRecorder = AudioRecorder()
     let transcriptionService = TranscriptionService()
     let hotkeyManager = HotkeyManager()
+    let speechActivityDetector = SpeechActivityDetector()
     let permissions = PermissionManager.shared
 
     var settingsWindow: NSWindow?
@@ -139,6 +140,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             appState = .idle
             updateMenuBarIcon(state: .idle)
             dismissIndicator()
+            return
+        }
+
+        let speechActivity = speechActivityDetector.analyze(samples: samples)
+        guard speechActivity.shouldTranscribe else {
+            #if DEBUG
+            print("No speech detected: \(speechActivity)")
+            #endif
+
+            appState = .idle
+            updateMenuBarIcon(state: .idle)
+            if speechActivity.shouldShowNoSpeechMessage {
+                showTemporaryMessage("No speech detected")
+            } else {
+                dismissIndicator()
+            }
             return
         }
 
