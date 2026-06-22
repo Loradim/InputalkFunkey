@@ -1,10 +1,7 @@
 import AppKit
 import Combine
+import InputalkFunkeyCore
 import SwiftUI
-
-enum Defaults {
-    static let showInDock = "showInDock"
-}
 
 // MARK: - App State
 
@@ -23,10 +20,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     let transcriptionService = TranscriptionService()
     let hotkeyManager = HotkeyManager()
     let speechActivityDetector = SpeechActivityDetector()
+    let promptSnippetStore = PromptSnippetStore()
+    let promptSnippetsCloseCoordinator = PromptSnippetsCloseCoordinator()
     let permissions = PermissionManager.shared
 
     var settingsWindow: NSWindow?
     var onboardingWindow: NSWindow?
+    var promptSnippetsWindow: NSWindow?
     private var appState: AppState = .idle
     private var lastTranscription: String?
 
@@ -102,6 +102,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         hotkeyManager.onPasteLastTranscription = { [weak self] in
             self?.pasteLastTranscription()
+        }
+        hotkeyManager.arePromptSnippetShortcutsAvailable = { [weak self] in
+            self?.appState == .idle
+        }
+        hotkeyManager.onPromptSnippetShortcut = { [weak self] trigger in
+            self?.insertPromptSnippet(trigger: trigger)
         }
         hotkeyManager.start()
     }
@@ -402,6 +408,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         clearLastItem.isEnabled = lastTranscription != nil
         menu.addItem(clearLastItem)
 
+        let promptSnippetsItem = NSMenuItem(
+            title: "Prompt Snippets...",
+            action: #selector(showPromptSnippetsAction),
+            keyEquivalent: "")
+        promptSnippetsItem.target = self
+        promptSnippetsItem.isEnabled = true
+        menu.addItem(promptSnippetsItem)
+
         let settingsItem = NSMenuItem(
             title: "Settings...", action: #selector(showSettingsAction), keyEquivalent: ",")
         settingsItem.target = self
@@ -427,6 +441,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         showSettings()
     }
 
+    @objc private func showPromptSnippetsAction() {
+        showPromptSnippets()
+    }
+
     @objc private func pasteLastTranscription() {
         guard let text = lastTranscription, !text.isEmpty else {
             showTemporaryMessage("No transcription yet")
@@ -434,6 +452,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         TextInserter.insertText(text)
+    }
+
+    private func insertPromptSnippet(trigger: SnippetTrigger) {
+        guard appState == .idle else { return }
+
+        guard let snippet = promptSnippetStore.usableSnippet(for: trigger) else {
+            showTemporaryMessage("No prompt assigned")
+            return
+        }
+
+        TextInserter.insertText(snippet.text)
     }
 
     @objc private func clearLastTranscription() {
@@ -463,6 +492,37 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         NSApp.setActivationPolicy(.regular)
         settingsWindow?.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    func showPromptSnippets() {
+        if promptSnippetsWindow == nil {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 860, height: 560),
+                styleMask: [.titled, .closable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Prompt Snippets"
+            window.titlebarAppearsTransparent = true
+            window.center()
+            window.contentMinSize = NSSize(width: 720, height: 460)
+            promptSnippetsCloseCoordinator.closeWindow = { [weak self] in
+                self?.promptSnippetsWindow?.close()
+            }
+            window.contentView = NSHostingView(
+                rootView: PromptSnippetsView(
+                    store: promptSnippetStore,
+                    closeCoordinator: promptSnippetsCloseCoordinator
+                )
+            )
+            window.isReleasedWhenClosed = false
+            window.delegate = self
+            promptSnippetsWindow = window
+        }
+
+        NSApp.setActivationPolicy(.regular)
+        promptSnippetsWindow?.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
     }
 
@@ -522,14 +582,26 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 // MARK: - NSWindowDelegate
 
 extension AppDelegate: NSWindowDelegate {
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard sender === promptSnippetsWindow else {
+            return true
+        }
+
+        return promptSnippetsCloseCoordinator.requestClose()
+    }
+
     func windowWillClose(_ notification: Notification) {
         guard let closedWindow = notification.object as? NSWindow else { return }
 
         if UserDefaults.standard.bool(forKey: Defaults.showInDock) { return }
 
-        let otherWindow: NSWindow? =
-            (closedWindow === settingsWindow) ? onboardingWindow : settingsWindow
-        if otherWindow?.isVisible != true {
+        let hasVisibleWindow = [settingsWindow, onboardingWindow, promptSnippetsWindow]
+            .contains { window in
+                guard let window, window !== closedWindow else { return false }
+                return window.isVisible
+            }
+
+        if !hasVisibleWindow {
             NSApp.setActivationPolicy(.accessory)
         }
     }

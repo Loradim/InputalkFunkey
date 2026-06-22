@@ -1,5 +1,6 @@
 import AppKit
 import Carbon.HIToolbox
+import InputalkFunkeyCore
 
 @_silgen_name("TISUpdateFnUsageType")
 private func TISUpdateFnUsageType(_ value: Int32)
@@ -19,6 +20,8 @@ class HotkeyManager {
     var onRecordStart: (() -> Void)?
     var onRecordStop: (() -> Void)?
     var onPasteLastTranscription: (() -> Void)?
+    var onPromptSnippetShortcut: ((SnippetTrigger) -> Void)?
+    var arePromptSnippetShortcutsAvailable: (() -> Bool)?
 
     private var eventTap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
@@ -47,7 +50,7 @@ class HotkeyManager {
 
         let userInfo = Unmanaged.passUnretained(state).toOpaque()
 
-        // Listen for Fn modifier changes and Fn+V retry insertion.
+        // Listen for Fn modifier changes, Fn+V retry insertion, and Fn+number snippets.
         let eventMask: CGEventMask =
             (1 << CGEventType.flagsChanged.rawValue) | (1 << CGEventType.keyDown.rawValue)
 
@@ -140,17 +143,8 @@ class HotkeyManager {
 ///       → fnDown within window → handsFreeRecording → fnDown → stop + transcribe → idle
 ///       → timeout → idle (single tap, ignored)
 /// ```
-private enum FnPhase {
-    case idle
-    case fnDownPending          // Fn pressed, waiting to see if it's a hold or first tap
-    case waitingForDoubleTap    // First quick tap done, waiting for second tap
-    case holdRecording          // Holding Fn, recording in progress
-    case handsFreeRecording     // Double-tapped, recording until next Fn press
-    case shortcutConsumed       // Fn+V handled; wait for Fn release before returning to idle
-}
-
 private class FnKeyState: @unchecked Sendable {
-    var phase: FnPhase = .idle
+    var phase: FnGesturePhase = .idle
     var fnDownTime: CFAbsoluteTime = 0
     var holdTimer: DispatchWorkItem?
     var doubleTapTimer: DispatchWorkItem?
@@ -168,7 +162,6 @@ private class FnKeyState: @unchecked Sendable {
 }
 
 private let fnFlag: UInt64 = 0x800000
-private let retryPasteKeyCode = Int64(kVK_ANSI_V)
 private let shortcutBlockingModifiers: CGEventFlags = [
     .maskCommand, .maskAlternate, .maskShift, .maskControl,
 ]
@@ -232,113 +225,118 @@ private func fnEventCallback(
 }
 
 private func handleKeyDown(event: CGEvent, state: FnKeyState) -> Unmanaged<CGEvent>? {
-    let keyCode = event.getIntegerValueField(.keyboardEventKeycode)
-    guard keyCode == retryPasteKeyCode else {
-        return Unmanaged.passUnretained(event)
-    }
-
+    let keyCode = Int(event.getIntegerValueField(.keyboardEventKeycode))
     let fnIsDown = ((event.flags.rawValue & fnFlag) != 0) || state.previousFnDown
-    guard fnIsDown else {
-        return Unmanaged.passUnretained(event)
-    }
-
     let hasOtherModifiers = !event.flags.intersection(shortcutBlockingModifiers).isEmpty
-    guard !hasOtherModifiers else {
-        return Unmanaged.passUnretained(event)
+
+    let decision = FnShortcutDecision.reduce(
+        phase: state.phase,
+        event: .keyDown(
+            FnKeyDown(
+                keyCode: keyCode,
+                isFnDown: fnIsDown,
+                hasBlockingModifiers: hasOtherModifiers
+            )
+        )
+    )
+
+    if shouldApply(decision: decision, currentPhase: state.phase) {
+        DispatchQueue.main.async {
+            applyDecision(decision, state: state)
+        }
     }
 
-    switch state.phase {
-    case .idle, .fnDownPending:
-        DispatchQueue.main.async {
-            handlePasteLastTranscriptionShortcut(state: state)
-        }
-        return nil
-    case .shortcutConsumed:
-        return nil
-    case .waitingForDoubleTap, .holdRecording, .handsFreeRecording:
-        return Unmanaged.passUnretained(event)
-    }
+    return decision.keyDisposition == .consume ? nil : Unmanaged.passUnretained(event)
 }
 
 @MainActor
 private func handleFnStateChange(state: FnKeyState, fnPressed: Bool) {
-    switch state.phase {
+    let decision = FnShortcutDecision.reduce(
+        phase: state.phase,
+        event: .fnChanged(isPressed: fnPressed)
+    )
+    applyDecision(decision, state: state)
+}
 
-    case .idle:
-        if fnPressed {
-            state.phase = .fnDownPending
-            state.fnDownTime = CFAbsoluteTimeGetCurrent()
+@MainActor
+private func applyDecision(_ decision: FnGestureDecision, state: FnKeyState) {
+    state.phase = decision.nextPhase
 
-            // Start hold timer
-            state.holdTimer?.cancel()
-            let holdWork = DispatchWorkItem { [weak state] in
-                guard let state, state.phase == .fnDownPending else { return }
-                // Held long enough → hold-to-talk
-                state.phase = .holdRecording
-                state.manager?.onRecordStart?()
+    for command in decision.timerCommands {
+        applyTimerCommand(command, state: state)
+    }
+
+    for action in decision.actions {
+        applyAction(action, state: state)
+    }
+}
+
+private func shouldApply(decision: FnGestureDecision, currentPhase: FnGesturePhase) -> Bool {
+    decision.nextPhase != currentPhase
+        || !decision.actions.isEmpty
+        || !decision.timerCommands.isEmpty
+}
+
+@MainActor
+private func applyTimerCommand(_ command: FnGestureTimerCommand, state: FnKeyState) {
+    switch command {
+    case .cancelHoldThreshold:
+        state.holdTimer?.cancel()
+        state.holdTimer = nil
+
+    case .scheduleHoldThreshold:
+        state.holdTimer?.cancel()
+        let holdWork = DispatchWorkItem { [weak state] in
+            Task { @MainActor in
+                guard let state else { return }
+                let decision = FnShortcutDecision.reduce(
+                    phase: state.phase,
+                    event: .holdThresholdReached
+                )
+                applyDecision(decision, state: state)
             }
-            state.holdTimer = holdWork
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + state.holdThreshold, execute: holdWork)
         }
+        state.holdTimer = holdWork
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + state.holdThreshold,
+            execute: holdWork
+        )
 
-    case .fnDownPending:
-        if !fnPressed {
-            // Released quickly → could be first tap of double-tap
-            state.holdTimer?.cancel()
-            state.holdTimer = nil
-            state.phase = .waitingForDoubleTap
+    case .cancelDoubleTapWindow:
+        state.doubleTapTimer?.cancel()
+        state.doubleTapTimer = nil
 
-            // Start double-tap window timer
-            state.doubleTapTimer?.cancel()
-            let dtWork = DispatchWorkItem { [weak state] in
-                guard let state, state.phase == .waitingForDoubleTap else { return }
-                // Timeout: was just a single tap → do nothing
-                state.phase = .idle
+    case .scheduleDoubleTapWindow:
+        state.doubleTapTimer?.cancel()
+        let doubleTapWork = DispatchWorkItem { [weak state] in
+            Task { @MainActor in
+                guard let state else { return }
+                let decision = FnShortcutDecision.reduce(
+                    phase: state.phase,
+                    event: .doubleTapWindowExpired
+                )
+                applyDecision(decision, state: state)
             }
-            state.doubleTapTimer = dtWork
-            DispatchQueue.main.asyncAfter(
-                deadline: .now() + state.doubleTapWindow, execute: dtWork)
         }
-
-    case .waitingForDoubleTap:
-        if fnPressed {
-            // Second tap! → hands-free recording
-            state.doubleTapTimer?.cancel()
-            state.doubleTapTimer = nil
-            state.phase = .handsFreeRecording
-            state.manager?.onRecordStart?()
-        }
-
-    case .holdRecording:
-        if !fnPressed {
-            // Released → stop recording + transcribe
-            state.phase = .idle
-            state.manager?.onRecordStop?()
-        }
-
-    case .handsFreeRecording:
-        if fnPressed {
-            // Next Fn press → stop recording + transcribe
-            state.phase = .idle
-            state.manager?.onRecordStop?()
-        }
-
-    case .shortcutConsumed:
-        if !fnPressed {
-            state.phase = .idle
-        }
+        state.doubleTapTimer = doubleTapWork
+        DispatchQueue.main.asyncAfter(
+            deadline: .now() + state.doubleTapWindow,
+            execute: doubleTapWork
+        )
     }
 }
 
 @MainActor
-private func handlePasteLastTranscriptionShortcut(state: FnKeyState) {
-    guard state.phase == .idle || state.phase == .fnDownPending else { return }
-
-    state.holdTimer?.cancel()
-    state.holdTimer = nil
-    state.doubleTapTimer?.cancel()
-    state.doubleTapTimer = nil
-    state.phase = .shortcutConsumed
-    state.manager?.onPasteLastTranscription?()
+private func applyAction(_ action: FnGestureAction, state: FnKeyState) {
+    switch action {
+    case .startRecording:
+        state.manager?.onRecordStart?()
+    case .stopRecording:
+        state.manager?.onRecordStop?()
+    case .pasteLastTranscription:
+        state.manager?.onPasteLastTranscription?()
+    case .promptSnippet(let trigger):
+        guard state.manager?.arePromptSnippetShortcutsAvailable?() ?? true else { return }
+        state.manager?.onPromptSnippetShortcut?(trigger)
+    }
 }

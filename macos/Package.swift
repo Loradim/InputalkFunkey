@@ -11,9 +11,14 @@ let package = Package(
         .package(url: "https://github.com/argmaxinc/WhisperKit.git", from: "0.9.0"),
     ],
     targets: [
+        .target(
+            name: "InputalkFunkeyCore",
+            path: "SourcesCore"
+        ),
         .executableTarget(
             name: "InputalkFunkey",
             dependencies: [
+                "InputalkFunkeyCore",
                 .product(name: "WhisperKit", package: "WhisperKit"),
             ],
             path: "Sources",
@@ -24,6 +29,11 @@ let package = Package(
             swiftSettings: [
                 .define("DEBUG", .when(configuration: .debug)),
             ]
+        ),
+        .testTarget(
+            name: "InputalkFunkeyCoreTests",
+            dependencies: ["InputalkFunkeyCore"],
+            path: "Tests/InputalkFunkeyCoreTests"
         )
     ]
 )
